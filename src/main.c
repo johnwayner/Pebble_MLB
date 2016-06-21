@@ -96,12 +96,20 @@ GColor GColorFromStringBW(char* color){
   }
 }
 
+typedef enum {
+    UNKNOWN = 0,
+    UPCOMING = 1,
+    IN_PROGRESS = 2,
+    COMPLETED = 3,
+    NO_PREV_DATA = 99,
+} Status;
+
 // Game Data data type
 typedef struct GameDataSets {
   char home_team[4];
   char away_team[4];
   int num_games;
-  int status;
+  Status status;
   char home_pitcher[20];
   char away_pitcher[20];
   char game_time[6];
@@ -127,6 +135,10 @@ typedef struct Settings {
   int refresh_time_off;
   int refresh_time_on;
   int bases_display;
+  int vibrate_on_score_change;
+  int vibrate_on_lead_change;
+  int vibrate_on_game_start;
+  int vibrate_on_game_end;
   GColor primary_color;
   GColor secondary_color;
   GColor background_color;
@@ -141,6 +153,10 @@ static void initialize_settings(){
   userSettings.shake_enabeled = 1;
   userSettings.shake_time = 5;
   userSettings.bases_display = 1;
+  userSettings.vibrate_on_score_change = 0;
+  userSettings.vibrate_on_lead_change = 0;
+  userSettings.vibrate_on_game_start = 0;
+  userSettings.vibrate_on_game_end = 0;
   userSettings.refresh_time_off = 3600;
   userSettings.refresh_time_on = 180;
   #ifdef PBL_COLOR
@@ -190,7 +206,11 @@ enum {
   PREF_PRIMARY_COLOR = 25,
   PREF_SECONDARY_COLOR = 26,
   PREF_BACKGROUND_COLOR = 27,
-  PREF_BASES_DISPLAY = 28
+  PREF_BASES_DISPLAY = 28,
+  PREF_VIBRATE_ON_SCORE_CHANGE = 29,
+  PREF_VIBRATE_ON_LEAD_CHANGE = 30,
+  PREF_VIBRATE_ON_GAME_START = 31,
+  PREF_VIBRATE_ON_GAME_END = 32
 };
 
 // Key values for graphic instructions Dictionary
@@ -430,26 +450,26 @@ static void change_colors(){
 // Function to determine which graphics need to be updated
 static void route_graphic_updates(){
   if ((currentGameData.status != previousGameData.status) || (strcmp(currentGameData.home_team, previousGameData.home_team) != 0) || (strcmp(currentGameData.away_team, previousGameData.away_team) != 0)){
-    if (currentGameData.status == 2){
+    if (currentGameData.status == IN_PROGRESS){
       // Game Started
       startGame();
-    } else if (previousGameData.status == 2){
+    } else if (previousGameData.status == IN_PROGRESS){
       // Game Ended
       endGame();
-    } else if (previousGameData.status == 3){
+    } else if (previousGameData.status == COMPLETED){
       // Show a New Game
       newGame();
-    } else if (currentGameData.status == 3){
+    } else if (currentGameData.status == COMPLETED){
       // End the Game
       endGame();
     } else {
       // New Game
       newGame();
     }
-  } else if (currentGameData.status == 0 && previousGameData.status != 0){
+  } else if (currentGameData.status == UNKNOWN && previousGameData.status != UNKNOWN){
     // New Game Fallback
     newGame();
-  } else if (currentGameData.status == 2){
+  } else if (currentGameData.status == IN_PROGRESS){
     // Declare the dictionary's iterator
     int instructions[6] = { 0, 0, 0, 0, 0, 0 };
     if ((currentGameData.first != previousGameData.first) || (currentGameData.second != previousGameData.second) || (currentGameData.third != previousGameData.third)){
@@ -480,6 +500,56 @@ static void route_graphic_updates(){
     updateGame(instructions);
   }
 }
+
+//-1 if x<0
+// 0 if x==0
+// 1 if x>0
+static int sign(int x) {
+  return (x > 0) - (x < 0);
+}
+
+static void do_vibrations() {
+  if(currentGameData.status == NO_PREV_DATA || previousGameData.status == NO_PREV_DATA) {
+    //No vibrations on first load
+    return;
+  }
+
+  bool shouldVibe = false;
+
+  if (currentGameData.status != previousGameData.status) {
+
+    if (currentGameData.status == IN_PROGRESS && userSettings.vibrate_on_game_start == 1) {
+      // Game Started
+      shouldVibe = true;
+    } else if (currentGameData.status == COMPLETED && userSettings.vibrate_on_game_end == 1) {
+      // End the Game
+      shouldVibe = true;
+    }
+  } else if (currentGameData.status == IN_PROGRESS) {
+
+    if (currentGameData.home_score != previousGameData.home_score && userSettings.vibrate_on_score_change == 1) {
+      shouldVibe = true;
+    }
+
+    if (currentGameData.away_score != previousGameData.away_score && userSettings.vibrate_on_score_change == 1) {
+      shouldVibe = true;
+    }
+
+    if (userSettings.vibrate_on_lead_change == 1) {
+      //Vibrate on lead change (but not on ties?); Remove `currScoreSign != 0` to vibe on ties as well
+      int prevScoreSign = sign(previousGameData.home_score - previousGameData.away_score);
+      int currScoreSign = sign(currentGameData.home_score - currentGameData.away_score);
+      if (prevScoreSign != currScoreSign && currScoreSign != 0) {
+        shouldVibe = true;
+      }
+    }
+  }
+
+  if (shouldVibe) {
+    vibes_short_pulse();
+  }
+}
+
 
 // Called when a message is received from PebbleKitJS
 static void in_received_handler(DictionaryIterator *received, void *context) {
@@ -515,6 +585,9 @@ static void in_received_handler(DictionaryIterator *received, void *context) {
             int instructions[6] = { 0, 0, 0, 1, 0, 0 };
             updateGame(instructions);
           }
+          break;
+        case PREF_VIBRATE_ON_SCORE_CHANGE:
+          userSettings.vibrate_on_score_change = (int)t->value->int32;
           break;
         case PREF_PRIMARY_COLOR:
           #ifdef PBL_COLOR
@@ -638,6 +711,7 @@ static void in_received_handler(DictionaryIterator *received, void *context) {
       
       // After processing data, route graphic updates
       route_graphic_updates();
+      do_vibrations();
     }
     
     
@@ -1076,7 +1150,7 @@ static void accel_tap_handler(AccelAxisType axis, int32_t direction) {
 void init(void) {
   // Populate the initial settings for loading
   initialize_settings();
-  currentGameData.status = 99;
+  currentGameData.status = NO_PREV_DATA;
 	window = window_create();
   // Set handlers to manage the elements inside the Window
   window_set_window_handlers(window, (WindowHandlers) {

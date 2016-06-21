@@ -12,6 +12,10 @@ var shakeEnabled = 1;
 var shakeTime = 5;
 var refreshTime = [3600, 60];
 var basesDisplay = 1;
+var vibrateOnScoreChange = 0;
+var vibrateOnLeadChange = 0;
+var vibrateOnGameStart = 0;
+var vibrateOnGameEnd = 0;
 var primaryColor = "FFFFFF";
 var secondaryColor = "FFFFFF";
 var backgroundColor = "AA0000";
@@ -290,7 +294,22 @@ function newGameDataRequest(){
 
 // Function to append settings to data
 function sendSettings(){
-  var dictionary = {'TYPE':0, 'PREF_FAVORITE_TEAM':parseInt(favoriteTeam), 'PREF_SHAKE_ENABELED':parseInt(shakeEnabled), 'PREF_SHAKE_TIME':parseInt(shakeTime), 'PREF_REFRESH_TIME_OFF':parseInt(refreshTime[0]), 'PREF_REFRESH_TIME_ON': parseInt(refreshTime[1]), 'PREF_PRIMARY_COLOR': primaryColor, 'PREF_SECONDARY_COLOR': secondaryColor, 'PREF_BACKGROUND_COLOR': backgroundColor, 'PREF_BASES_DISPLAY': parseInt(basesDisplay)};
+  var dictionary = {
+    'TYPE': 0,
+    'PREF_FAVORITE_TEAM': parseInt(favoriteTeam),
+    'PREF_SHAKE_ENABELED': parseInt(shakeEnabled),
+    'PREF_SHAKE_TIME': parseInt(shakeTime),
+    'PREF_REFRESH_TIME_OFF': parseInt(refreshTime[0]),
+    'PREF_REFRESH_TIME_ON': parseInt(refreshTime[1]),
+    'PREF_PRIMARY_COLOR': primaryColor,
+    'PREF_SECONDARY_COLOR': secondaryColor,
+    'PREF_BACKGROUND_COLOR': backgroundColor,
+    'PREF_BASES_DISPLAY': parseInt(basesDisplay),
+    'PREF_VIBRATE_ON_SCORE_CHANGE': parseInt(vibrateOnScoreChange),
+    'PREF_VIBRATE_ON_LEAD_CHANGE': parseInt(vibrateOnLeadChange),
+    'PREF_VIBRATE_ON_GAME_START': parseInt(vibrateOnGameStart),
+    'PREF_VIBRATE_ON_GAME_END': parseInt(vibrateOnGameEnd)
+  };
   sendDataToWatch(dictionary);
 }
 
@@ -332,6 +351,22 @@ function loadSettings(){
   if(basesDisplay === null){
     basesDisplay = 1;
   }
+  vibrateOnScoreChange = localStorage.getItem(10);
+  if(vibrateOnScoreChange === null){
+    vibrateOnScoreChange = 1;
+  }
+  vibrateOnLeadChange = localStorage.getItem(11);
+  if(vibrateOnLeadChange === null){
+    vibrateOnLeadChange = 1;
+  }
+  vibrateOnGameStart = localStorage.getItem(12);
+  if(vibrateOnGameStart === null){
+    vibrateOnGameStart = 1;
+  }
+  vibrateOnGameEnd = localStorage.getItem(13);
+  if(vibrateOnGameEnd === null){
+    vibrateOnGameEnd = 1;
+  }
   sendSettings();
 }
 
@@ -372,6 +407,22 @@ function storeSettings(configuration){
   if (configuration.hasOwnProperty('bases_display') === true) {
     basesDisplay = configuration.bases_display;
     localStorage.setItem(9, basesDisplay);
+  }
+  if (configuration.hasOwnProperty('vibrate_on_score_change') === true) {
+    vibrateOnScoreChange = configuration.vibrate_on_score_change;
+    localStorage.setItem(10, vibrateOnScoreChange);
+  }
+  if (configuration.hasOwnProperty('vibrate_on_lead_change') === true) {
+    vibrateOnLeadChange = configuration.vibrate_on_lead_change;
+    localStorage.setItem(11, vibrateOnLeadChange);
+  }
+  if (configuration.hasOwnProperty('vibrate_on_game_start') === true) {
+    vibrateOnGameStart = configuration.vibrate_on_game_start;
+    localStorage.setItem(12, vibrateOnGameStart);
+  }
+  if (configuration.hasOwnProperty('vibrate_on_game_end') === true) {
+    vibrateOnGameEnd = configuration.vibrate_on_game_end;
+    localStorage.setItem(13, vibrateOnGameEnd);
   }
   sendSettings();
   newGameDataRequest();
@@ -426,7 +477,19 @@ Pebble.addEventListener('webviewclosed', function(e) {
 Pebble.addEventListener('showConfiguration', function() {
   loadSettings();
   var watch = Pebble.getActiveWatchInfo ? Pebble.getActiveWatchInfo() : null;
-  var url = 'http://pebble.phl.chs.network/mlb/config/config-' + settings_version + '.php?favorite-team=' + favoriteTeam + '&refresh-off=' + refreshTime[0] + '&refresh-game=' + refreshTime[1] + '&shake-enabled=' + shakeEnabled + '&shake-time=' + shakeTime + '&bases-display=' + basesDisplay + '&platform=' + watch.platform;
+  var url = 'http://pebble.phl.chs.network/mlb/config/config-' + settings_version + '.php' 
+      + '?favorite-team=' + favoriteTeam 
+      + '&refresh-off=' + refreshTime[0] 
+      + '&refresh-game=' + refreshTime[1] 
+      + '&shake-enabled=' + shakeEnabled
+      + '&shake-time=' + shakeTime 
+      + '&bases-display=' + basesDisplay
+      + '&vibe-on-score-change=' + vibrateOnScoreChange
+      + '&vibe-on-lead-change=' + vibrateOnLeadChange
+      + '&vibe-on-game-start=' + vibrateOnGameStart
+      + '&vibe-on-game-end=' + vibrateOnGameEnd
+      + '&platform=' + watch.platform;
+  
   Pebble.openURL(url);
 });
 
